@@ -96,7 +96,7 @@ class AudioSynthesizer:
         noise = np.random.randn(length) * amplitude
         return noise
 
-    def _generate_sweep(self, start_freq, end_freq, sweep_duration, db_level):
+    def _generate_sweep(self, start_freq, end_freq, sweep_duration, db_level, delay_samples=None):
         """
         生成对数扫频信号。
 
@@ -104,6 +104,7 @@ class AudioSynthesizer:
         :param end_freq: 结束频率
         :param sweep_duration: 扫频持续时间
         :param db_level: 扫频信号强度
+        :param delay_samples: 随机添加的延迟采样点数，会延长扫频持续时长
         :return: 扫频信号数组
         """
         amplitude = db_to_amplitude(db_level)
@@ -113,9 +114,16 @@ class AudioSynthesizer:
         # method='logarithmic' 对应于频率随时间指数增长
         sweep_signal = chirp(t, f0=start_freq, f1=end_freq, t1=sweep_duration, method='logarithmic')
 
+        # 如果需要，那么随机插入若干个采样点，其取值为附近的上一个采样点的值，用于模拟真实录制环境中设备时钟偏移产生的延迟
+        if delay_samples is not None:
+            for _ in range(delay_samples):
+                delay_start = random.randint(1, len(sweep_signal) - 1)
+                sample_value = sweep_signal[delay_start - 1]
+                sweep_signal = np.insert(sweep_signal, delay_start, sample_value)
+
         return sweep_signal * amplitude
 
-    def generate_audio_file(self, filename):
+    def generate_audio_file(self, filename, delay_samples=None):
         """
         生成并保存音频文件。
 
@@ -145,7 +153,8 @@ class AudioSynthesizer:
             start_freq=20,
             end_freq=20000,
             sweep_duration=sweep_duration,
-            db_level=sweep_db
+            db_level=sweep_db,
+            delay_samples=delay_samples
         )
 
         # 4. 将扫频信号叠加到噪音底噪上
@@ -175,13 +184,13 @@ def main():
 
     # 生成音频文件
     for i in range(3):
-       synthesizer.generate_audio_file(f"data/group1/A_{i+1}.wav")
+       synthesizer.generate_audio_file(f"data/group1/A_{i+1}.wav", 5)
 
     for i in range(3):
-       synthesizer.generate_audio_file(f"data/group2/B_{i+1}.wav")
+       synthesizer.generate_audio_file(f"data/group2/B_{i+1}.wav", 5)
 
     for i in range(3):
-       synthesizer.generate_audio_file(f"data/group3/C_{i+1}.wav")
+       synthesizer.generate_audio_file(f"data/group3/C_{i+1}.wav", 5)
 
 if __name__ == "__main__":
     main()
