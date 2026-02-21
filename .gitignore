@@ -7,3 +7,4 @@ desktop.ini
 *.gz
 *.zip
 /data/
+/output/

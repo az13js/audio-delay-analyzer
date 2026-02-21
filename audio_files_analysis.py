@@ -240,7 +240,7 @@ class AudioAnalysis:
                 y = y if 1 == y.ndim else y[:, self.config.channel]
 
                 y_norm = y * (max_rms / rms_values[i])
-                sf.write(result_file, y_norm, sr)
+                sf.write(result_file, y_norm, sr, subtype=sf.info(file).subtype)
 
         return results
 
@@ -341,7 +341,7 @@ class AudioAnalysis:
         elif len(y) < len(y_ref):
             # 需要在y的右侧添加空采样点
             y = np.pad(y, (0, len(y_ref) - len(y)), mode='constant')
-        sf.write(output_file, y, sr)
+        sf.write(output_file, y, sr, subtype=sf.info(reference_file).subtype)
 
 if __name__ == "__main__":
     config = Config()

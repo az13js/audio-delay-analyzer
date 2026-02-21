@@ -170,7 +170,7 @@ class AudioSynthesizer:
         audio_data[start_sample:end_sample] += sweep_signal
 
         # 5. 写入文件
-        sf.write(filename, audio_data, self.sample_rate)
+        sf.write(filename, audio_data, self.sample_rate, subtype='PCM_24')
         print(f"  - 文件已保存。")
 
 def main():
