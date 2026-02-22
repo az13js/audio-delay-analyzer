@@ -68,6 +68,10 @@ python delay_analyze.py
 python delay_visualize.py
 ```
 
+生成的热力图样式类似：
+
+![延迟热力图](README_IMAGES/delay_matrix_heatmap_optimized.png)
+
 ## 配置说明
 
 在 `audio_files_analysis.py` 的 `Config` 类中可以调整以下参数：
