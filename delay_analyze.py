@@ -5,8 +5,10 @@
 功能：分析各音频对比项的延迟情况，计算总延迟并排序
 """
 
+from audio_files_analysis import Config
 import pandas as pd
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
@@ -76,7 +78,7 @@ def analyze_delay_data(file_path):
         ))
 
     # 6. 保存结果到CSV
-    output_file = 'output/delay_analysis_results.csv'
+    output_file = os.path.join(Config().output_dir, 'delay_analysis_results.csv')
     results_sorted.to_csv(output_file, index=False, encoding='utf-8-sig')
     print(f"\n✓ 详细结果已保存到: {output_file}")
 
@@ -85,7 +87,7 @@ def analyze_delay_data(file_path):
 # 主程序入口
 if __name__ == "__main__":
     # 指定CSV文件路径
-    file_path = "output/all_sequences.csv"  # 请根据实际文件名修改
+    file_path = os.path.join(Config().output_dir, "all_sequences.csv")
 
     # 运行分析
     results = analyze_delay_data(file_path)
@@ -93,4 +95,4 @@ if __name__ == "__main__":
     print("\n" + "=" * 80)
     print("分析完成！")
     print("=" * 80)
-    print("\n输出文件: output/delay_analysis_results.csv - 详细分析结果")
+    print(f"\n输出文件: {file_path} - 详细分析结果")

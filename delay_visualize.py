@@ -1,7 +1,9 @@
+from audio_files_analysis import Config
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -9,7 +11,7 @@ warnings.filterwarnings('ignore')
 plt.style.use('default')
 plt.rcParams['font.size'] = 10
 
-df = pd.read_csv('output/delay_analysis_results.csv')
+df = pd.read_csv(os.path.join(Config().output_dir, "delay_analysis_results.csv"))
 
 def format_file_name_sort(files: list) -> list:
     input_files = ['WD_1', 'WD_2', 'WD_3', 'charge_1', 'charge_2', 'charge_3', 'lanlin_1', 'lanlin_2', 'lanlin_3']
@@ -78,7 +80,8 @@ plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right', fontsize=11)
 plt.setp(ax.yaxis.get_majorticklabels(), rotation=0, fontsize=11)
 
 plt.tight_layout()
-plt.savefig('output/delay_matrix_heatmap_optimized.png', dpi=300, bbox_inches='tight')
+heatmap_file_path = os.path.join(Config().output_dir, "delay_matrix_heatmap_optimized.png")
+plt.savefig(heatmap_file_path, dpi=300, bbox_inches='tight')
 plt.show()
 
-print("✅ 延迟矩阵热力图已保存为 output/delay_matrix_heatmap_optimized.png")
+print(f"✅ 延迟矩阵热力图已保存为 {heatmap_file_path}")

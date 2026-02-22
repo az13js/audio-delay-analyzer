@@ -65,6 +65,7 @@ import soundfile as sf
 from scipy.signal import chirp
 import random
 import os
+from audio_files_analysis import Config
 from utils import db_to_amplitude
 
 class AudioSynthesizer:
@@ -174,23 +175,25 @@ class AudioSynthesizer:
         print(f"  - 文件已保存。")
 
 def main():
+    data_path = Config().data_path
+
     # 实例化合成器
     synthesizer = AudioSynthesizer(sample_rate=48000, duration=10.0)
 
     os.makedirs(f"data", exist_ok=True)
     # 生成文件夹data/group1、data/group2、data/group3
     for i in range(1, 4):
-        os.makedirs(f"data/group{i}", exist_ok=True)
+        os.makedirs(f"{data_path}/group{i}", exist_ok=True)
 
     # 生成音频文件
     for i in range(3):
-       synthesizer.generate_audio_file(f"data/group1/A_{i+1}.wav", 5)
+       synthesizer.generate_audio_file(f"{data_path}/group1/A_{i+1}.wav", 5)
 
     for i in range(3):
-       synthesizer.generate_audio_file(f"data/group2/B_{i+1}.wav", 5)
+       synthesizer.generate_audio_file(f"{data_path}/group2/B_{i+1}.wav", 5)
 
     for i in range(3):
-       synthesizer.generate_audio_file(f"data/group3/C_{i+1}.wav", 5)
+       synthesizer.generate_audio_file(f"{data_path}/group3/C_{i+1}.wav", 5)
 
 if __name__ == "__main__":
     main()
