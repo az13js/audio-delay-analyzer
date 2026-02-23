@@ -81,6 +81,8 @@ python delay_visualize.py
 - `channel`：要分析的声道索引（默认 `0`）。
 - `output_dir`：输出目录（默认 `"./output"`）。
 - `align_padding_samples`：对齐时参考文件前后填充的空白采样点数（默认 0.5 秒的采样数）。
+- `limit_delay_ms`：延迟检测阈值（单位：毫秒），超过该值的延迟点会被标记为 NaN（默认 5.0 ms）。
+- `too_low_db`：音量过低阈值（单位：dB），当窗口内 RMS 低于该值时忽略该窗口的延迟计算（默认 -60 dB）。
 
 ## 输出文件详解
 
@@ -94,13 +96,13 @@ python delay_visualize.py
 
 ### `figure/`
 每对文件的延迟图，命名格式如 `00_01_A_1.wav_vs_A_2.wav.png`。
-图中背景为参考音频的频谱图（灰色），红色曲线表示待比较文件相对于参考文件的延迟（毫秒）。延迟超出 ±5 ms 的部分会被标记为无效（`None`），以避免极端值干扰。
+图中背景为参考音频的频谱图（灰色），红色曲线表示待比较文件相对于参考文件的延迟（毫秒）。延迟超出 ±5 ms 的部分会视为无效，以避免极端值干扰。
 
 ![示例图：A_1.wav vs A_2.wav](README_IMAGES/00_01_A_1.wav_vs_A_2.wav.png)
 ![示例图：A_1.wav vs A_3.wav](README_IMAGES/00_02_A_1.wav_vs_A_3.wav.png)
 
 ### `all_sequences.csv`
-CSV 文件，每一列对应一对音频的比较结果，每一行是每个时间窗口的延迟值（单位：秒）。可用于后续统计分析。
+CSV 文件，每一列对应一对音频的比较结果，每一行是每个时间窗口的延迟值（单位：毫秒）。可用于后续统计分析。
 
 ### `delay_analysis_results.csv`
 由 `delay_analyze.py` 生成，包含每对音频文件的延迟总和（绝对值的累积），并按总延迟从大到小排序。便于识别延迟最大的音频对。

@@ -5,6 +5,7 @@ from typing import List, Optional
 import numpy as np
 from scipy.signal import correlate
 from utils import db_to_amplitude
+import matplotlib.pyplot as plt
 
 class Config:
     def __init__(self):
@@ -18,6 +19,10 @@ class Config:
         self.output_dir: str = "./output"
         # 数据对齐时，参考音频文件前后填充的空白采样点数量
         self.align_padding_samples: int = int(self.sample_rate * 0.5)
+        # 延迟检测时，超过延迟时间则视为异常删除数据，单位：毫秒
+        self.limit_delay_ms: float = 5
+        # 延迟检测时，低于此分贝数值则忽略
+        self.too_low_db: float = -60
 
 class AudioAnalysis:
     def __init__(self, config: Config):
@@ -36,7 +41,7 @@ class AudioAnalysis:
         for file in self.aligned_files:
             print(f"整体对齐后的音频文件: {file}")
 
-    def delay_correlation(self, idx_ref: int, idx: int, savefig: Optional[str]=None, plot: bool=False, window_size: Optional[int]=None, hard_clipped_delay_ms: Optional[int]=None) -> List[float]:
+    def delay_correlation(self, idx_ref: int, idx: int, savefig: Optional[str]=None, plot: bool=False, window_size: Optional[int]=None, limit_delay_ms: Optional[float]=None) -> np.ndarray:
         """
         利用窗口，比较两个音频文件之间的延迟，并绘制图谱。
 
@@ -45,8 +50,10 @@ class AudioAnalysis:
             idx: 待比较音频文件的索引
             savefig: 保存图片的文件名
             plot: 是否绘制图谱
+            window_size: 窗口大小，单位：采样点数量。可选，默认为采样率，即1秒
+            limit_delay_ms: 延迟时间阈值，超过阈值则视为异常，单位：毫秒。可选，默认为配置指定毫秒
         Returns:
-            delay_samples: 延迟时间列表，单位：秒
+            delay_samples_ms: 延迟时间，单位：毫秒
         """
         if savefig is None and not plot:
             return
@@ -57,11 +64,11 @@ class AudioAnalysis:
         ref_y, ref_sr = sf.read(ref_file)
         y, sr = sf.read(file)
 
-        delay_samples = []
+        delay_samples_ms = []
         if window_size is None:
-            window_size = int(self.config.sample_rate / 2)
-        if hard_clipped_delay_ms is None:
-            hard_clipped_delay_ms = 1000 * 2 * window_size / self.config.sample_rate
+            window_size = self.config.sample_rate
+        if limit_delay_ms is None:
+            limit_delay_ms = self.config.limit_delay_ms
 
         # 开头和结尾的空间预留出来
         step_count = int(len(ref_y) / window_size) - 2
@@ -79,8 +86,8 @@ class AudioAnalysis:
 
             audio_ref_rms = np.sqrt(np.mean(audio_ref ** 2))
             audio_y_rms = np.sqrt(np.mean(audio_y ** 2))
-            if audio_ref_rms < db_to_amplitude(-60) or audio_y_rms < db_to_amplitude(-60): # 音量过小，忽略
-                delay_samples.append(0.0)
+            if audio_ref_rms < db_to_amplitude(self.config.too_low_db) or audio_y_rms < db_to_amplitude(self.config.too_low_db): # 音量过小，忽略
+                delay_samples_ms.append(0.0)
                 continue
             alpha = audio_ref_rms / audio_y_rms
             audio_y = audio_y * alpha
@@ -90,15 +97,16 @@ class AudioAnalysis:
             estimated_offset = np.argmax(corr)
             offset = estimated_offset - window_size
             offset = -offset # 正数表示audio_y延迟，负数表示audio_y提前
-            delay_time_sec = offset / ref_sr
-            delay_samples.append(delay_time_sec)
+            delay_time_ms = 1000 * offset / ref_sr
+            delay_samples_ms.append(delay_time_ms)
+        delay_samples_ms = np.array(delay_samples_ms)
+        delay_samples_ms[np.abs(delay_samples_ms) > limit_delay_ms] = np.nan
 
         # 绘制图谱所需的数据，背景是参考音频区间的FFT图谱，前景是延迟时间，单位是毫秒
         ref_y_samples = ref_y[sample_begin: sample_begin + sample_length]
         ref_y_times = ref_y_samples / ref_sr
 
         # --- 绘图逻辑 ---
-        import matplotlib.pyplot as plt
 
         plt.figure(figsize=(12, 6))
 
@@ -119,13 +127,8 @@ class AudioAnalysis:
         # 构建延迟曲线的时间轴 - 保持原有逻辑
         time_axis = (np.arange(step_count) * window_size + sample_begin + window_size / 2) / ref_sr
 
-        # 将延迟秒数转换为毫秒
-        delay_ms = np.array(delay_samples) * 1000
-        #delay_ms = np.clip(delay_ms, -hard_clipped_delay_ms, hard_clipped_delay_ms)
-        delay_ms[np.abs(delay_ms) > hard_clipped_delay_ms] = None
-
         # 绘制曲线，颜色设为醒目的红色
-        ax2.plot(time_axis, delay_ms, color='red', linewidth=2, marker='o', markersize=3, label='Delay (ms)')
+        ax2.plot(time_axis, delay_samples_ms, color='red', linewidth=2, marker='o', markersize=3, label='Delay (ms)')
         ax2.set_ylabel('Delay (ms)', color='red')
         ax2.tick_params(axis='y', labelcolor='red')
 
@@ -142,7 +145,7 @@ class AudioAnalysis:
             plt.show()
         else:
             plt.close()
-        return delay_samples
+        return delay_samples_ms
 
     @staticmethod
     def validate_single_wav(filepath: str, config: Config) -> None:
@@ -347,14 +350,14 @@ if __name__ == "__main__":
     config = Config()
     analysis = AudioAnalysis(config)
     m = analysis.audio_files
-    os.makedirs("output/figure", exist_ok=True)
+    os.makedirs(os.path.join(config.output_dir, "figure"), exist_ok=True)
     results = {}
     for i in range(0, len(m) - 1):
         for j in range(i+1, len(m)):
             file_name = f"{i:02d}_{j:02d}_" + os.path.basename(m[i]) + '_vs_' + os.path.basename(m[j]) + ".png"
-            data:List[float] = analysis.delay_correlation(i, j, savefig=f"output/figure/{file_name}", window_size=config.sample_rate, hard_clipped_delay_ms=5)
+            data = analysis.delay_correlation(i, j, savefig=os.path.join(config.output_dir, "figure", file_name))
             title = f"{os.path.basename(m[i])} vs {os.path.basename(m[j])}"
-            results[title] = data # 延迟时间，秒
+            results[title] = data # 延迟时间，毫秒
 
     df = pd.DataFrame({title: pd.Series(data) for title, data in results.items()})
-    df.to_csv("output/all_sequences.csv", index=False)
+    df.to_csv(os.path.join(config.output_dir, "all_sequences.csv"), index=False)
