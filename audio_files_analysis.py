@@ -5,6 +5,7 @@ from typing import List, Optional
 import numpy as np
 from scipy.signal import correlate
 from utils import db_to_amplitude
+from resample_tool import IntegerUpsampler
 import matplotlib.pyplot as plt
 
 class Config:
@@ -23,6 +24,8 @@ class Config:
         self.limit_delay_ms: float = 5
         # 延迟检测时，低于此分贝数值则忽略
         self.too_low_db: float = -60
+        # 检测延迟的时候，整数上采样倍数。默认为1，不进行上采样。上采样能提高延迟检测的准确度，但是会增加计算量
+        self.upsample_factor: int = 1
 
 class AudioAnalysis:
     def __init__(self, config: Config):
@@ -41,7 +44,7 @@ class AudioAnalysis:
         for file in self.aligned_files:
             print(f"整体对齐后的音频文件: {file}")
 
-    def delay_correlation(self, idx_ref: int, idx: int, savefig: Optional[str]=None, plot: bool=False, window_size: Optional[int]=None, limit_delay_ms: Optional[float]=None) -> np.ndarray:
+    def delay_correlation(self, idx_ref: int, idx: int, savefig: Optional[str]=None, plot: bool=False, window_size: Optional[int]=None, limit_delay_ms: Optional[float]=None, upsampler: Optional[IntegerUpsampler]=None) -> np.ndarray:
         """
         利用窗口，比较两个音频文件之间的延迟，并绘制图谱。
 
@@ -52,6 +55,7 @@ class AudioAnalysis:
             plot: 是否绘制图谱
             window_size: 窗口大小，单位：采样点数量。可选，默认为采样率，即1秒
             limit_delay_ms: 延迟时间阈值，超过阈值则视为异常，单位：毫秒。可选，默认为配置指定毫秒
+            upsampler: 上采样器，可选，默认为None
         Returns:
             delay_samples_ms: 延迟时间，单位：毫秒
         """
@@ -91,13 +95,7 @@ class AudioAnalysis:
                 continue
             alpha = audio_ref_rms / audio_y_rms
             audio_y = audio_y * alpha
-
-            # 接下来需要找出audio_ref在audio_y中出现的位置
-            corr = correlate(audio_y, audio_ref, mode='valid')
-            estimated_offset = np.argmax(corr)
-            offset = estimated_offset - window_size
-            offset = -offset # 正数表示audio_y延迟，负数表示audio_y提前
-            delay_time_ms = 1000 * offset / ref_sr
+            delay_time_ms = self.calculate_delay_correlation(audio_ref, audio_y, window_size, ref_sr, upsampler)
             delay_samples_ms.append(delay_time_ms)
         delay_samples_ms = np.array(delay_samples_ms)
         delay_samples_ms[np.abs(delay_samples_ms) > limit_delay_ms] = np.nan
@@ -146,6 +144,32 @@ class AudioAnalysis:
         else:
             plt.close()
         return delay_samples_ms
+
+    def calculate_delay_correlation(self, ref: np.ndarray, y: np.ndarray, window_size: int, ref_sr: int, upsampler: Optional[IntegerUpsampler]=None) -> float:
+        """
+        计算两个音频文件的延迟时间。
+
+        Args:
+            ref: 参考音频
+            y: 待比较音频
+            window_size: 窗口大小，单位：采样点数量
+            ref_sr: 参考音频的采样率
+            upsampler: 上采样器，可选，默认为None
+        Returns:
+            delay_time_ms: 延迟时间，单位：毫秒
+        """
+        audio_ref = upsampler(ref) if upsampler is not None else ref
+        audio_y = upsampler(y) if upsampler is not None else y
+        real_window_size = window_size * upsampler.factor if upsampler is not None else window_size
+        real_ref_sr = ref_sr * upsampler.factor if upsampler is not None else ref_sr
+
+        # 接下来需要找出audio_ref在audio_y中出现的位置
+        corr = correlate(audio_y, audio_ref, mode='valid')
+        estimated_offset = np.argmax(corr)
+        offset = estimated_offset - real_window_size
+        offset = -offset # 正数表示audio_y延迟，负数表示audio_y提前
+        delay_time_ms = 1000 * offset / real_ref_sr
+        return delay_time_ms
 
     @staticmethod
     def validate_single_wav(filepath: str, config: Config) -> None:
@@ -348,6 +372,12 @@ class AudioAnalysis:
 
 if __name__ == "__main__":
     config = Config()
+    upsampler = IntegerUpsampler(
+        factor=config.upsample_factor,
+        window=('kaiser', 5.0),  # beta=5.0 平衡质量与速度
+        padtype='line'  # 线性外推，适合音频
+    ) if config.upsample_factor > 1 else None
+
     analysis = AudioAnalysis(config)
     m = analysis.audio_files
     os.makedirs(os.path.join(config.output_dir, "figure"), exist_ok=True)
@@ -355,7 +385,7 @@ if __name__ == "__main__":
     for i in range(0, len(m) - 1):
         for j in range(i+1, len(m)):
             file_name = f"{i:02d}_{j:02d}_" + os.path.basename(m[i]) + '_vs_' + os.path.basename(m[j]) + ".png"
-            data = analysis.delay_correlation(i, j, savefig=os.path.join(config.output_dir, "figure", file_name))
+            data = analysis.delay_correlation(i, j, savefig=os.path.join(config.output_dir, "figure", file_name), upsampler=upsampler)
             title = f"{os.path.basename(m[i])} vs {os.path.basename(m[j])}"
             results[title] = data # 延迟时间，毫秒
 
